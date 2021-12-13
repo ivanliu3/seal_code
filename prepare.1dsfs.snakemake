@@ -1,0 +1,49 @@
+#!/usr/bin/python
+
+import re
+import os
+
+FA="/home/users/xiaodong/Documents/Project/Seal/reference/GCF_004348235.1_GSC_HSeal_1.0_genomic.fna"
+OUTMAIN="/home/users/xiaodong/Documents/Project/Seal/heterozygosity"
+MY_SITES="/home/users/xiaodong/Documents/Project/Seal/region_v2/20210120_r2/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.r2.final.site"
+MY_CHRS="/home/users/xiaodong/Documents/Project/Seal/region_v2/20210120_r2/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.r2.final.chr"
+BAM_DIR="/home/users/xiaodong/Documents/Project/Seal/bam" # run this first, and then run the folder for ICE, NEW and ORK. So heteryzogisty results are up to date
+#BAM_DIR="/home/users/xiaodong/Documents/Project/Seal/bam_troubleshooting" 
+INDS = [ re.sub("_sorted.bam", "",f)  for f in os.listdir(BAM_DIR) if f.endswith("_sorted.bam") & f[0].isupper()  ] 
+
+
+ANGSD="/home/users/xiaodong/Software/angsd"
+BASEQ=20
+MAPQ=30
+
+rule all:
+     input:
+        expand( os.path.join(OUTMAIN, "data_2021", "safs","{s}.saf.idx"), s=INDS),
+        expand( os.path.join(OUTMAIN, "data_2021", "safs", "{s}.saf.gz"),s=INDS),
+        expand( os.path.join(OUTMAIN, "data_2021", "safs", "{s}.saf.pos.gz"),s=INDS),
+        expand( os.path.join(OUTMAIN, "data_2021", "safs", "{s}.arg"), s=INDS),
+        expand( os.path.join(OUTMAIN, "data_2021", "1dsfs","{s}.fs"), s=INDS)
+	
+rule prepare_saf:
+     input:
+              bamfile = os.path.join(BAM_DIR,"{s}_sorted.bam")
+     output:
+              saf_idx = os.path.join(OUTMAIN, "data_2021", "safs","{s}.saf.idx"),
+              saf = os.path.join(OUTMAIN, "data_2021", "safs", "{s}.saf.gz"),
+              saf_pos = os.path.join(OUTMAIN, "data_2021", "safs", "{s}.saf.pos.gz"),
+              arg = os.path.join(OUTMAIN, "data_2021", "safs", "{s}.arg")
+     params:
+              outbase = lambda wildcards, output: output.saf_idx.replace(".saf.idx", "")
+     threads: 2
+     log:     os.path.join(OUTMAIN, "data_2021", "safs", "{s}.log")
+     shell:
+              "{ANGSD}/angsd  -P {threads} -i {input} -out {params.outbase} -minMapQ {MAPQ} -minQ {BASEQ} -dosaf 1 -rf {MY_CHRS} -sites {MY_SITES} -anc {FA} -GL 1  2> {log}"
+
+
+rule prepare_sfs:
+     input:   os.path.join(OUTMAIN, "data_2021", "safs","{s}.saf.idx")
+     output:  os.path.join(OUTMAIN, "data_2021", "1dsfs","{s}.fs")
+     threads: 2
+     log:     os.path.join(OUTMAIN, "data_2021","1dsfs", "{s}.log")
+     shell:
+              "{ANGSD}/misc/realSFS -P {threads} {input} > {output} 2> {log}"

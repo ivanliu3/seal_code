@@ -1,0 +1,99 @@
+#!/usr/bin/python
+
+import re
+import os
+
+FA="/home/users/xiaodong/Documents/Project/Seal/reference/GCF_004348235.1_GSC_HSeal_1.0_genomic.fna"
+OUTMAIN="/home/users/xiaodong/Documents/Project/Seal/Fst"
+MY_SITES="/home/users/xiaodong/Documents/Project/Seal/region_v2/20210120_r2/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.r2.final.site"
+MY_CHRS="/home/users/xiaodong/Documents/Project/Seal/region_v2/20210120_r2/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.r2.final.chr"
+POP_DIR="/home/users/xiaodong/Documents/Project/Seal/sample_list_v2/20210119/r2/pop"
+POPS = [ re.sub(".pop.bamlist", "",f)  for f in os.listdir(POP_DIR) if f.endswith("bamlist") & f[0].isupper()  ]
+
+
+ANGSD="/home/users/xiaodong/Software/angsd"
+BASEQ=20
+MAPQ=30
+
+
+rule all:
+     input:
+        expand( os.path.join(OUTMAIN, "data", "safs","{s}.saf.idx"), s=POPS),
+        expand( os.path.join(OUTMAIN, "data", "safs", "{s}.saf.gz"),s=POPS),
+        expand( os.path.join(OUTMAIN, "data", "safs", "{s}.saf.pos.gz"),s=POPS),
+        expand( os.path.join(OUTMAIN, "data", "safs", "{s}.arg"), s=POPS)
+
+
+
+rule prepare_saf:
+      input:
+           bamlist = os.path.join(POP_DIR, "{s}.pop.bamlist")
+      output:
+           saf_idx = os.path.join(OUTMAIN, "data", "safs","{s}.saf.idx"),
+           saf = os.path.join(OUTMAIN, "data", "safs", "{s}.saf.gz"),
+           saf_pos = os.path.join(OUTMAIN, "data", "safs", "{s}.saf.pos.gz"),
+           arg = os.path.join(OUTMAIN, "data", "safs", "{s}.arg")
+      params:
+           outbase = lambda wildcards, output: output.saf_idx.replace(".saf.idx", "")
+      threads: 2
+      log:
+           os.path.join(OUTMAIN, "data", "safs", "{s}.log")
+      shell:
+            "{ANGSD}/angsd  -P {threads} -bam {input.bamlist} -out {params.outbase} -minMapQ {MAPQ} -minQ {BASEQ} -dosaf 1  -rf {MY_CHRS} -sites {MY_SITES} -anc {FA} -GL 1  2> {log}"
+
+            
+#${ANGSD}/misc/realSFS -P ${threads} ${OUTMAIN}/data/${pop1}.pop.saf.idx  ${OUTMAIN}/data/${pop2}.pop.saf.idx \
+#	> ${OUTMAIN}/data/${pop1}_${pop2}.sfs 2> ${OUTMAIN}/data/${pop1}_${pop2}.log
+
+#${ANGSD}/misc/realSFS fst index  ${OUTMAIN}/data/${pop1}.pop.saf.idx  ${OUTMAIN}/data/${pop2}.pop.saf.idx \
+#	-sfs  ${OUTMAIN}/data/${pop1}_${pop2}.sfs  -fstout ${OUTMAIN}/data/${pop1}_${pop2} >> ${OUTMAIN}/data/${pop1}_${pop2}.log
+
+#${ANGSD}/misc/realSFS fst stats ${OUTMAIN}/data/${pop1}_${pop2}.fst.idx >> ${OUTMAIN}/data/${pop1}_${pop2}.log
+#!/usr/bin/python
+
+import re
+import os
+import itertools
+
+
+FA="/home/users/xiaodong/Documents/Project/Seal/reference/GCF_004348235.1_GSC_HSeal_1.0_genomic.fna"
+OUTMAIN="/home/users/xiaodong/Documents/Project/Seal/Fst"
+MY_SITES="/home/users/xiaodong/Documents/Project/Seal/region_v2/20210120_r2/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.r2.final.site"
+MY_CHRS="/home/users/xiaodong/Documents/Project/Seal/region_v2/20210120_r2/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.r2.final.chr"
+POP_DIR="/home/users/xiaodong/Documents/Project/Seal/sample_list_v2/20210119/r2/pop"
+POPS = [ re.sub(".pop.bamlist", "",f)  for f in os.listdir(POP_DIR) if f.endswith("bamlist") & f[0].isupper()  ]
+
+PAIR = list(itertools.combinations(POPS, 2))
+COMB = ["_".join(f) for f in PAIR]
+
+ANGSD="/home/users/xiaodong/Software/angsd"
+BASEQ=20
+MAPQ=30
+
+
+rule all:
+     input:
+          expand( os.path.join(OUTMAIN,"data","2dsfs","{s}.sfs"), s=COMB )
+
+
+
+rule sfs_2d:
+      input:
+           saf_idx1 = os.path.join(OUTMAIN, "data", "safs","{s1}.saf.idx"),
+           saf_idx2 = os.path.join(OUTMAIN, "data", "safs","{s2}.saf.idx")
+      output:
+           os.path.join(OUTMAIN,"data", "2dsfs","{s1}_{s2}.sfs")
+      threads: 3
+      log:
+           os.path.join(OUTMAIN, "data","2dsfs", "{s1}_{s2}.log")
+      shell:
+            "{ANGSD}/misc/realSFS -P {threads} {input.saf_idx1} {input.saf_idx2} > {output} 2> {log}"
+
+           
+#${ANGSD}/misc/realSFS -P ${threads} ${OUTMAIN}/data/${pop1}.pop.saf.idx  ${OUTMAIN}/data/${pop2}.pop.saf.idx \
+#	> ${OUTMAIN}/data/${pop1}_${pop2}.sfs 2> ${OUTMAIN}/data/${pop1}_${pop2}.log
+
+#${ANGSD}/misc/realSFS fst index  ${OUTMAIN}/data/${pop1}.pop.saf.idx  ${OUTMAIN}/data/${pop2}.pop.saf.idx \
+#	-sfs  ${OUTMAIN}/data/${pop1}_${pop2}.sfs  -fstout ${OUTMAIN}/data/${pop1}_${pop2} >> ${OUTMAIN}/data/${pop1}_${pop2}.log
+
+#${ANGSD}/misc/realSFS fst stats ${OUTMAIN}/data/${pop1}_${pop2}.fst.idx >> ${OUTMAIN}/data/${pop1}_${pop2}.log

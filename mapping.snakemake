@@ -1,0 +1,90 @@
+
+FASTQC="/home/users/xiaodong/Software/FastQC/fastqc"
+BWA="/home/users/xiaodong/Software/bwa/bwa"
+FASTP="/home/users/xiaodong/Software/fastp/fastp"
+SAMTOOLS="/home/krishang/software/samtools/samtools-1.9/bin/samtools"
+BGZIP="/home/krishang/software/htslib/htslib/bin/bgzip"
+
+FA="/home/users/xiaodong/Documents/Project/Seal/reference/GCF_004348235.1_GSC_HSeal_1.0_genomic.fna"
+
+OUTMAIN="/home/users/xiaodong/Documents/Project/Seal"
+
+configfile:"/home/users/xiaodong/Documents/Project/Seal/script/seal_config.v2.yaml"
+
+wildcard_constraints:
+    sample = "|".join(config.keys())
+
+rule all_qc:
+     input: expand(os.path.join(OUTMAIN, "fastqc_posttrim", "{sample}"), sample=config.keys()),
+            expand(os.path.join(OUTMAIN, "bam", "{sample}_nomarkdup.bam"), sample=config.keys()),
+            expand(os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam"), sample=config.keys()),
+            expand(os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam.bai"),sample=config.keys()),
+            expand(os.path.join(OUTMAIN, "bam", "{sample}.flagstat"),sample=config.keys()),
+            expand(os.path.join(OUTMAIN, "bam", "{sample}.stat"), sample=config.keys()),
+            expand(os.path.join(OUTMAIN, "bam", "{sample}.idxstat"), sample=config.keys())	    
+                        
+            
+rule fastqc_post_trim:
+     input:     lambda wildcards: config[wildcards.sample][0]
+     output:    directory(os.path.join(OUTMAIN, "fastqc_posttrim", "{sample}"))
+     threads:   2
+     log:       os.path.join(OUTMAIN, "fastqc_posttrim", "{sample}.log")
+     shell: """
+            mkdir -p {output}
+            {FASTQC} -o {output} -f fastq -t {threads} {input} &> {log};
+            """
+
+         
+
+rule map:
+     input:	os.path.join(OUTMAIN, "trim","{sample}.trim.fq.gz")
+     output:	bam = os.path.join(OUTMAIN, "bam", "{sample}_nomarkdup.bam")
+     log:	bwa_log = os.path.join(OUTMAIN, "bam","bwa.{sample}.log"),
+     		bam_log = os.path.join(OUTMAIN, "bam","bam.{sample}.log")
+     params:	rg = r"@RG\tID:{sample}\tSM:{sample}" 
+     threads:	2
+     shell: """
+     	    {BWA} mem -R '{params.rg}' -M -t {threads} {FA} {input} 2> {log.bwa_log} | {SAMTOOLS} view -@{threads} -q 1 -SbT {FA} - > {output.bam} 2>{log.bam_log}
+	    """
+
+
+rule sort_bam:
+     input:    os.path.join(OUTMAIN, "bam", "{sample}_nomarkdup.bam")
+     output:   os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam")
+     log:      bam_log = os.path.join(OUTMAIN, "bam","bam.{sample}.log")
+     threads:  2
+     shell: """
+     {SAMTOOLS} sort -@{threads} {input} -o {output} 2>>{log.bam_log}
+            """
+	   
+rule index_bam:
+     input:   os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam")
+     output:  os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam.bai")
+     threads: 2
+     shell: """
+     {SAMTOOLS} index -@{threads} {input}
+            """
+
+rule flagstat_bam:
+     input:   os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam")
+     output:  stats = os.path.join(OUTMAIN, "bam", "{sample}.flagstat")
+     shell: """
+     {SAMTOOLS} flagstat {input} > {output.stats}
+            """
+
+rule stats_bam:
+     input:   os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam")
+     output:  os.path.join(OUTMAIN, "bam", "{sample}.stat")
+     threads: 2
+     shell: """
+     {SAMTOOLS} stats -@{threads} {input} > {output}
+            """
+
+rule idxstats_bam:
+     input:   os.path.join(OUTMAIN, "bam", "{sample}_sorted.bam")
+     output:  os.path.join(OUTMAIN, "bam", "{sample}.idxstat")
+     threads: 2
+     shell: """
+     {SAMTOOLS} idxstats -@{threads} {input} > {output}
+            """
+

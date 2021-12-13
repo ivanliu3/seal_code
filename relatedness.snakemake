@@ -1,0 +1,61 @@
+import re
+import os
+import sys
+import itertools
+
+pop= os.environ.get("zz")
+ANGSD="/home/users/xiaodong/Software/angsd"
+BASEQ=20
+MAPQ=30
+
+FA="/home/users/xiaodong/Documents/Project/Seal/reference/GCF_004348235.1_GSC_HSeal_1.0_genomic.fna"
+OUTMAIN="/home/users/xiaodong/Documents/Project/Seal/relatedness_v2/20210119"
+MY_SITES = "/home/users/xiaodong/Documents/Project/Seal/region_v2/20210119/r1/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.site"
+MY_CHRS="/home/users/xiaodong/Documents/Project/Seal/region_v2/20210119/r1/mappability.autosome.Newint_meantwo2_sd.subtractREPEAT.subtractF.chr"
+
+pop_dir = "/home/users/xiaodong/Documents/Project/Seal/sample_list_v2/20210119/r1/pop"
+POPS = [re.sub(".pop.bamlist$", "", f) for f in os.listdir(pop_dir) if re.match(str(pop),f)]
+POP = POPS[0]
+SAMPLE_FILES = [line.strip() for line in open(os.path.join(pop_dir,POP+".pop.bamlist"), 'r')]
+SAMPLES = [re.sub("_sorted.bam","",os.path.basename(f)) for f in SAMPLE_FILES]
+PATHS = [os.path.dirname(f) for f in SAMPLE_FILES]
+BAM_DIR = PATHS[0]
+PAIR = list(itertools.combinations(SAMPLES, 2))
+COMB = ["_".join(f) for f in PAIR]
+OUTMAIN2 = os.path.join(OUTMAIN,POP)
+
+rule all:
+    input:
+        expand( os.path.join(OUTMAIN2,"safs","{s}.saf.idx"), s=SAMPLES),
+        expand( os.path.join(OUTMAIN2, "safs", "{s}.saf.gz"),s=SAMPLES),
+        expand( os.path.join(OUTMAIN2, "safs", "{s}.saf.pos.gz"),s=SAMPLES),
+        expand( os.path.join(OUTMAIN2, "safs", "{s}.arg"), s=SAMPLES),
+        expand( os.path.join(OUTMAIN2, "sfs_2d", "{s}.sfs"),s=COMB )
+
+rule per_sample_saf:
+    input:
+        bam = os.path.join(BAM_DIR,"{s}_sorted.bam")
+    output:
+        saf_idx = os.path.join(OUTMAIN2,"safs","{s}.saf.idx"),
+        saf = os.path.join(OUTMAIN2, "safs", "{s}.saf.gz"),
+        saf_pos = os.path.join(OUTMAIN2, "safs", "{s}.saf.pos.gz"),
+        arg = os.path.join(OUTMAIN2, "safs", "{s}.arg")
+    params:
+        outbase = lambda wildcards, output: output.saf_idx.replace(".saf.idx", "")
+    threads:
+        2
+    shell:
+        "{ANGSD}/angsd -i {input.bam} -out {params.outbase} -minMapQ {MAPQ} -minQ {BASEQ} -dosaf 1 -rf {MY_CHRS} -sites {MY_SITES} -anc {FA} -GL 1 -P {threads} 2> /dev/null"
+
+
+rule sfs_2d:
+    input:
+        saf_idx1 = os.path.join(OUTMAIN2, "safs", "{s1}.saf.idx"),
+        saf_idx2 = os.path.join(OUTMAIN2, "safs", "{s2}.saf.idx")
+    output:
+        os.path.join(OUTMAIN2, "sfs_2d", "{s1}_{s2}.sfs")
+    threads: 2
+    log:
+        os.path.join(OUTMAIN2, "sfs_2d", "{s1}_{s2}.log")
+    shell:
+        "{ANGSD}/misc/realSFS -P {threads} {input.saf_idx1} {input.saf_idx2} > {output} 2> {log}"

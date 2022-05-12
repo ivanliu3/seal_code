@@ -1,2 +1,2 @@
 # seal_code
-All codes here are used for the project of range-wide harbhour seals.
+Codes used for the project of range-wide harhour seals.

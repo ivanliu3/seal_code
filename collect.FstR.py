@@ -4,8 +4,8 @@ import re
 import os
 
 #DIR = "/home/users/xiaodong/Documents/Project/Seal/trouble_shooting_2/sfs/F0999P001/data/fst"
-#DIR = "/home/users/xiaodong/Documents/Project/Seal/Fst/data/fst"
-DIR = "/home/users/xiaodong/Documents/Project/Seal/Fst/Sex/male/data/fst"
+DIR = "/home/users/xiaodong/Documents/Project/Seal/Fst/data/fst"
+
 POPS = [re.sub(".fst","",f) for f in os.listdir(DIR) if f.endswith("fst")]
 dictA = {}
 dictSort = {}
